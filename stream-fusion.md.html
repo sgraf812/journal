@@ -1,0 +1,14 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Thoughts about Stream fusion
+
+## Stream Fusion, to Completeness
+
+- MSP: Like `Expression<T>` trees in .Net
+- MetaOCaml   
+  - Bracket `.<_>. : 'a -> 'a code`: Remember the unfolding of the expression. Analogue: `Expression<_>`, C# compiler rewrites syntax to expression tree
+  - Escape `.~ : 'a code -> 'a`: Splice in/inline the rembered unfolding, into the current unfolding. Analogue: None, needs explicit build up of syntax tree
+  - Run `.! : 'a code -> 'a`: (possibly JIT) Compile the unfolding and run it. Analogue: `expr.Compile()`
+- Probably amounts to annotating `Stream` fields with 'force specialisation' annotations
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
