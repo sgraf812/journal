@@ -32,9 +32,26 @@
 - Consider a node `A` that `dependOn` `B` twice
 - The first change of `B` doesn't make unstable, but if we employ scheme 3, the second must do so!
 - So:  
-  - At the begin of `recompute`, we have to delete the node from the unstable list
+  - At the begin of `recompute`, we have to delete the node from the worklist
   - All dependency edges are cleared! Only re-added *after* the first `dependOn`
   - This makes sure that the first `dependOn` in the example doesn't mark `A` as unstable, but the second does
+- Outline for `recompute A`:  
+  1. delete `A` from worklist
+  2. cons `A` to the call stack
+  3. 'focus' on the `NodeInfo` of `A`
+  4. delete all references and the corresponding referrer records in references ($\mathcal{O}(d*\log(n))$ where $d$ is the max degree of a node and $n$ is the number of nodes)
+  5. invoke transfer function
+  6. Update node value
+  7. Compare with old value by change detector
+  8. Enqueue referrers
+- Outline for `dependOn B` (encodes the actual scheme (1-3) above):
+  1. When there's a cycle, return $\bot$
+  2. When there's a stable value, return that value
+  3. `B` is either unstable or not even discovered, but not present in the call stack. Now depending on the scheme (1-3): 
+    1. Return $\bot$.
+    2. If not discovered, `recompute`. Otherwise return unstable approximation.
+    3. Always `recompute`.
+  4. Only now add `B` to the references of caller `A` and vice versa with referrer
 
 ## Comparison/Concepts from Datalog
 
