@@ -26,6 +26,16 @@
   2. Benchmark variants
   3. My gut says 2. will win. If so, tune implementation for that.
 
+### How an algorithm that can do 3. looks like
+
+- We need fine-grained tracking of *when* a node update influences a dependency
+- Consider a node `A` that `dependOn` `B` twice
+- The first change of `B` doesn't make unstable, but if we employ scheme 3, the second must do so!
+- So:  
+  - At the begin of `recompute`, we have to delete the node from the unstable list
+  - All dependency edges are cleared! Only re-added *after* the first `dependOn`
+  - This makes sure that the first `dependOn` in the example doesn't mark `A` as unstable, but the second does
+
 ## Comparison/Concepts from Datalog
 
 - Uses declarative logic language like Prolog to specify analyses
