@@ -1,0 +1,29 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Thoughts about the `datafix` approach
+
+## Comparison/Concepts from Datalog
+
+- Uses declarative logic language like Prolog to specify analyses
+- Faster (!) than C versions!
+- Related: Dyna (implemented in Haskell), bddbddb, LogicBlox
+
+### Practical program analysis using general purpose logic programming systems—a case study
+
+- Applies this approach to strictness analysis
+- Section 2: 'Analysis methods are usually described in terms of semantic equations whose fix point represents the program property under consideration. These semantic equations can be viewed as a (constraint) logic program, where each equation is translated into a Horn clause.'
+- Section 2 is VERY interesting! Suggests that `TrasferFunction` is nothing else than a formulation of this logic system
+- Section 3.2: Demand propagation (like transformer)
+- predicate $sp_f(D, X)$ for function $f(x)$: incoming demand $D$ propagates to argument demand $X$ on $x$
+- Performance in 4.3: 5% of time taken by ghc, although this was in 1996...
+
+### From Datalog to flix: a declarative language for fixed points on lattices (2016)
+
+- VERY VERY related
+- Datalog dialect with proper lattices and ops
+- DSL
+- Rather slow, due to interpreter. FW: compile to JVM bytecode, query planning, index selection, etc.
+- JVM, so not really usable
+- Approach remarkable, mine droven to extreme
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
