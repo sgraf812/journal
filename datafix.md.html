@@ -2,6 +2,30 @@
 
 # Thoughts about the `datafix` approach
 
+## What algorithm to employ in `recompute`
+
+- *At the least* we want to descend into $\bot$ nodes, so that we discover the set of reachable nodes quickly
+- Potentially we could always descend into nodes until we hit a cycle  
+  - so do depth-first search for all nodes, not just $\bot$ ones
+- So, effectively there are 3 degrees wrt. how eager we are to descend into nodes:  
+  1. Don't descend at all, let the worklist handle this  
+    - This means that we need O(n) iterations of the worklist just to discover stuff
+    - We assume that enqueing and dequeing nodes ($\mathcal{O}(\log(n))$) in the worklist is less efficient than just descending into the node directly!
+    - Also when one dependency is $\bot$, there may be nodes which aren't discovered because of that
+    - Consider a non-recursive expression, where we could get away with a single depth-first traversal: The worklist-only approach would need to `recompute` a let node at least twice
+    - A trivial optimisation would be to descend into nodes we haven't discovered before, e.g. which are $\bot$ and not present in the call stack (cycles)
+  2. Descend into $\bot$ (or rather undiscovered) nodes if they aren't already in the call stack  
+    - Discovers set of reachable nodes quickly, so that the worklist algorithm sees all reachable nodes and can figure out a good iteration order
+  3. Descend into every non-stable node, modulo breaking cycles at some point (typically after the first iteration)  
+    - Worklist algorithm would probably the better authority to decide which non-stable node to `recompute` next, given it knows all relevant nodes
+    - At some point this corresponds to what the ad-hoc analyses in GHC do: Iterate a single cycle until all nodes are stable
+    - Only difference: We don't really know up-front how many iterations to do.. Would entail iterating in `dependOn`??? Probably not viable
+- So, all in all, the second scheme is probably the way to go about this
+- Plan:  
+  1. Implement something that can handle all three schemes
+  2. Benchmark variants
+  3. My gut says 2. will win. If so, tune implementation for that.
+
 ## Comparison/Concepts from Datalog
 
 - Uses declarative logic language like Prolog to specify analyses
