@@ -2,6 +2,18 @@
 
 # Thoughts about the `datafix` approach
 
+## Why do we need the outer monad? Can't we just dynamically detect dependencies?
+
+- We need to allocate nodes in the data-flow graph  
+- We can do that in a way that doesn't leak into the UI, but we still have to construct the problem in some kind of 'FrameworkDescription' (to put it in terms of `reactive-banana`)
+- All attempts failed to support a signature à la `datafix :: (LiftFunc (Domain m) m -> LiftFunc (Domain m) m) -> LiftFunc (Domain m) m`  
+  - (That doesn't consider change detection, but we can always thread that through)
+  - We need to allocate nodes *before* actually executing the actions, otherwise we can't tie the knot 
+  - Only way out: An ugly hack based on `unsafePerformIO (newIORef UninitiailizedNode)`
+  - Doesn't work as expected when we call `datafix` inside of `datafix`: It will allocate a new node on each dynamic call, rather than cache among 'syntactically identical' occurrences
+  - I.o.w.: It's not `Reader`-like state, but rather actual `State` (cache the node id on subsequent iterations) that we can't handle referentially transparent without leaking into the UI
+- At least we don't need to leak node ids to the user interface (I think), so the monad should be pretty opaque, like it is for RB
+
 ## What algorithm to employ in `recompute`
 
 - *At the least* we want to descend into $\bot$ nodes, so that we discover the set of reachable nodes quickly
