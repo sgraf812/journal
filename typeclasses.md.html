@@ -1,0 +1,58 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Type classes
+
+## Drawbacks of the current situation
+
+- http://pchiusano.github.io/2018-02-13/typeclasses.html
+- most glaring https://www.reddit.com/r/haskell/comments/7xgkez/the_trouble_with_typeclasses/du89m1c/  
+  - Dreaded diamond problem, how to discover such instances?  
+    - Either make one package aware of the other
+    - Or have some smart infrastructure suggest including stuff for instances
+    - But then we could just include it altogether
+    - And do this for every possible instance that isn't in the actual dependency set
+    - Administrative overhead!
+    - Couldn't we use backpack to specify which instances we want?
+
+### Backpack-based solution
+
+- https://www.reddit.com/r/haskell/comments/7xgkez/the_trouble_with_typeclasses/dua1j9b/
+- Would mean that the dependency solver must be aware of the module instantiations and compute the specific set of constraints just that particular instantiation
+- Not a solution, but related idea: Inject type class instances into GHC's solver through some kind of Mixin process and have instances not be included by default  
+  - Unsure what this solves. Instances must be declared in an unlayered Mega-repo nonetheless
+
+### Real problem: Dependency footprint of unused instances
+
+- When does this hurt?  
+  - Binary size -- `-fsplit-objs` and maybe have GHC include better information on what is strippable?
+  - Compile time -- We compile irrelevant stuff. Not really a problem when we have binary caching
+  - Diamonds still -- No real solution to that. Take inspiration in expression problem?
+
+### Diamonds, or: Expression Problem
+
+****************************
+*                          *
+*        .------.          *
+*        | base |          *
+*        '-+--+-'          *
+*         /    \           *
+*        v      v          *
+* .--------.  .----------. *
+* | vector |  | hashable | *
+* '-----+--'  '--+-------' *
+*        \      /          *
+*         v    v           *
+*   .------------------.   *
+*   | vector-instances |   *
+*   '------------------'   *
+*                          *
+****************************
+
+#### Current solution: Packages of orphans
+
+- Not really granular -- which packages should `vector-instances` depend on?
+- [Bad discoverability](https://www.reddit.com/r/haskell/comments/7xgkez/the_trouble_with_typeclasses/du9mmu1/), although tooling could help (e.g. hoogle?)
+- Related: [ezyang about confluence and coherence of type classes](http://blog.ezyang.com/2014/07/type-classes-confluence-coherence-global-uniqueness/)
+- Orphans should be registered in GHC, so that it can find duplicate/incoherent orphans
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>

@@ -2,7 +2,7 @@
 
 # Thoughts about the `datafix` approach
 
-## Why do we need the outer monad? Can't we just dynamically detect dependencies?
+## Why do we need the outer `ProblemSpec` monad? Can't we just dynamically detect dependencies?
 
 - We need to allocate nodes in the data-flow graph  
 - We can do that in a way that doesn't leak into the UI, but we still have to construct the problem in some kind of 'FrameworkDescription' (to put it in terms of `reactive-banana`)
@@ -13,6 +13,48 @@
   - Doesn't work as expected when we call `datafix` inside of `datafix`: It will allocate a new node on each dynamic call, rather than cache among 'syntactically identical' occurrences
   - I.o.w.: It's not `Reader`-like state, but rather actual `State` (cache the node id on subsequent iterations) that we can't handle referentially transparent without leaking into the UI
 - At least we don't need to leak node ids to the user interface (I think), so the monad should be pretty opaque, like it is for RB
+
+## How does this compare to `reactive-banana`?
+
+- Setup happens in `MomentIO = ReaderT EventNetwork Build`, [`Build`](https://hackage.haskell.org/package/reactive-banana-1.1.0.1/docs/src/Reactive-Banana-Prim-Types.html#Build)
+- Graph based on `HashMap a [a]`, nodes for `Pulse a`s, e.g. each `Event`. So, something constructed by `apply` will be a distinct node in the graph
+- These kinds of edges are tracked and topologically sorted when the network is finally build
+
+## As `MonadFix`
+
+- `datafix` is really a restricted form of `MonadFix`, where `a ~ LiftInto a m`
+- Would love it if `mdo` was part of `-XRebindableSyntax`, but it isn't
+- So we can't use `mdo` as it stands, but we can mimic the experience of `mfix`
+
+## Separate Builder monad from the monad we do computations in
+
+|Pros | Cons|
+|-----|-----|
+| SOC | less flexible: We might want to `mfix` new functions depending on data-flow (e.g. applicative vs. monadic) |
+| unforeseeable repercussions | Don't know how to do this in a way that doesn't expose implementation details |
+| There's the hope of the compiler doing a better job at floating bindings out | What about the specification? DFP looks like `m (func m)`. We can't get at the func this way, it might be guarded by a dependOn |
+
+## The signature of datafix
+
+- Outer `Builder` is necessary by the last section
+- How do we enable mutually recursive groups?  
+  - Just `(Func -> Builder Func) -> Builder Func` doesn't work: we can't get out any result out of the functional unless we fully apply it
+  - Full application is a no-go:  
+    1) we compute stuff repeatedly we don't need to 
+    2) it mixes `Builder` phase with `DependencyM` phase
+  - Ideally, we want `datafix` to also return a value in `Builder`
+  - Rather than fixing what we return to `Func`, we should instead return an arbitrary `a` the user supplies
+  - So, instead of `mfix :: (a -> m a) -> m a` we have `datafixEq :: (Func -> Builder (a, Func)) -> Builder a`
+
+## Why not `dependOn`?
+
+- Seems like the cleaner/simpler primitive, but leaks `Node`s into UI
+- Also enables strictly more scenarios, by leaving allocation to the user
+- Outer abstractions are free to build whatever they want
+- Maybe pass around some partially applied version, like `LetDn` provides?
+- Or just formulate the `datafix` primitive in terms of the `dependOn` abstraction? Is that possible?  
+  - Means we also have to provide the surrounding Builder infrastructure, which we already have anyway
+  - Compile `(MonadDatafix mdat, MonadDependency mdep) => Builder (LiftFunc domain mdat) -> DFP Dense domain` which can be passed on to `solveProblem`
 
 ## What algorithm to employ in `recompute`
 
