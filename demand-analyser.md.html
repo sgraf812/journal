@@ -1,0 +1,17 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Thoughts about DmdAnal
+
+## Reasons to seperate out StrAnal, UsageAnal and CPR
+
+- They're different enough that there are a lot of special cases  
+  - Note [Aggregated demand for cardinality]
+  - Note [Lazy and unleashable free variables] -- basically because LetUp is only beneficial for UsageAnal
+  - That whole thunk vs. function distinction
+  - [Hacks for efficient fix-pointing](https://ghc.haskell.org/trac/ghc/ticket/14816)
+  - CPR: is fundamentally a forward analysis, as shown by nested CPR
+- Special cases aren't easily understood; which code fragment/comment refers to which analysis?
+- The data dependencies form a DAG: `Usage -> Strictness -> CPR`  
+  - results in the extra virgin run for CPR
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>

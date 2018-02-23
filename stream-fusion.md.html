@@ -11,4 +11,20 @@
   - Run `.! : 'a code -> 'a`: (possibly JIT) Compile the unfolding and run it. Analogue: `expr.Compile()`
 - Probably amounts to annotating `Stream` fields with 'force specialisation' annotations
 
+## From Lists to Streams to Nothing at All
+
+- Open problem: concatMap
+- `[ i * i | i <- [1..n] ]` as `concatMap` of singletons
+- We want the one of the mutually recursive functions ($go_2$) to be specialized to the `next` function  
+  - These stepper functions are always used strictly by any possible `go` (is that so?!)
+  - So we don't destroy any sharing when evaluating arguments to whnf before call to `go`
+  - We can specialize `go` for the resulting lambda (whnf!), or at least let the inliner decide if to potentially duplicate code
+  - That's a potentital drawback compared to specializing for data
+  - Should probably employ the same/similar heuristics as the inliner to decide if specialization is worthwhile
+
+## Solution: Call-pattern specialisation
+
+- Doesn't currently work with lambdas
+- Can be easily extended to work with lambdas, but doesn't cope with free vars (yet)
+
 <!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
