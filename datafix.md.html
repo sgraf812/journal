@@ -154,4 +154,40 @@
 - JVM, so not really usable
 - Approach remarkable, mine droven to extreme
 
+# Ideas for a paper
+
+## Introduction
+
+- I'd love a short example, but I don't think we have one
+- Draw analogies to dynamic programming? simple use case for 
+
+## Motivation
+
+- SOC: Separate specification of the data-flow problem from its solution
+- DRY: Every analysis has its own solver
+- Efficiency: Exponential time for Reader/Env-like state vs. polynomial with State/annotated syntax trees
+- Precision: Call Arity vs. Demand Analysis
+
+## ??? Design?
+
+- Compared to [Stitch](https://cs.brynmawr.edu/~rae/papers/2018/stitch/stitch.pdf), I lack a credible narrative
+- Just no reason to guide through the implementation
+- BUT there's stuff like scheme{1,2,3} and why it is correct
+- Monotone Maps
+- Different graph back-ends, based on sparseness? Actually, only the dense is interesting for static analysis
+
+## Evaluation in GHC?
+
+## Related work
+
+- Datalog, ... (see above)
+- FRP
+
+## Future work
+
+- Node priorities by TopoSort
+- Constants
+
+## Conclusion
+
 <!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
