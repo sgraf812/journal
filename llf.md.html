@@ -1,0 +1,26 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Late Lambda Lifting
+
+## Floating join points
+
+- Relevant Notes:  
+  - `Note [Lifting LNEs]` (from LLF before rebase)
+  - `Note [Join ceiling]`: The level after which a join point is destroyed
+  - `Note [Floating join point bindings]`: join points should not be destroyed, except if floated to top-level (compare to the wiki page on SequentCore). Contrary to wiki, for recursive bindings even (probably if big enough)
+  - `Note [Free join points]`: Never float a MFE that has a free join Id
+- The Float Out section of [the wiki page on SequentCore](https://ghc.haskell.org/trac/ghc/wiki/SequentCore)  
+  - Float non-recursive join points to top-level. On the grounds that if it was to be big to be inlined anyway, there would be no point in having it in `f`, because there would never be any case context exposed. Doesn't apply to recursive JPs
+
+## Nomenclature
+
+- MFE: Maximal free expression (not documented *anywhere*, except a short mention under the sig of `lvlExpr`)  
+  - [HaskellWiki on maximal free expression](https://wiki.haskell.org/Maximal_free_expression)
+  - Can be traced back to [supercombinators](http://people.bath.ac.uk/masjap/Notes/C73/section3_13.html)
+  - https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-75.pdf
+
+## TODO
+
+- Abstract over join IDs? We don't want to do that for FloatOut, according to `Note [Free join points]`, but why isn't the (in that case, non-rec, nullary) join point floated to top-level?
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
