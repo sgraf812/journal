@@ -11,6 +11,8 @@
   - `Note [Free join points]`: Never float a MFE that has a free join Id
 - The Float Out section of [the wiki page on SequentCore](https://ghc.haskell.org/trac/ghc/wiki/SequentCore)  
   - Float non-recursive join points to top-level. On the grounds that if it was to be big to be inlined anyway, there would be no point in having it in `f`, because there would never be any case context exposed. Doesn't apply to recursive JPs
+- Compare lifting join points to Outlining: take the common pattern, lift it to top-level so that the resulting expression gets smaller. Only the 'find other common join points' part is missing. Could be rectified by a global CSE pass
+- Ideally, the only difference between a join point and the corresponding lifted top-level function is that the caller needs to pass free variables in registers (or on the stack, once). No new continuation needs to be pushed, as the callee will jump to the outer continuation when finished. The callee could of course do `call <lifted-jp>; retn`, but that's equivalent to a `jmp <lifted-jp>`. The call was in tail-position, after all. So, as long as register pressure isn't an issue, everything is fine, modulo a few `mov`s.
 
 ## Nomenclature
 
@@ -18,9 +20,45 @@
   - [HaskellWiki on maximal free expression](https://wiki.haskell.org/Maximal_free_expression)
   - Can be traced back to [supercombinators](http://people.bath.ac.uk/masjap/Notes/C73/section3_13.html)
   - https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-75.pdf
+- Silt:
+- FISilt:
+- BSilt: body ?
+- FIIs: DIdEnv FII
+- FII: var + UseInfo. Mnemonic: Free identifier information?!
+- FVUp: Maintains two views on an expression: itself + floats and expression anticipating CorePrep
+- UseInfo: 4 flags: unapplied, undersat, exactly sat, oversat
+- cgil: clo growth in lam
 
 ## TODO
 
 - Abstract over join IDs? We don't want to do that for FloatOut, according to `Note [Free join points]`, but why isn't the (in that case, non-rec, nullary) join point floated to top-level?
+- Benchmarks to investigate:  
+  - CSD: All allocs gone! -97% executed instructions.  
+    - Reason: A single recursive non-join let (relict of missed fusion opportunity) is lifted
+    - Funny enough, all the other effect systems got slower/execute more instructions without any benefit to allocation
+    - It's even faster than pure strict state. WTF
+    - It's always the same: LLF lifts out the local recursive `go` binding in `times`. But the effect is only that dramatic for CSD :o
+    - `times`, though exported, is never called. So it's probably somethign else.
+    - Also: Why would the different effs have different slowdowns?
+  - Worst: veritas: +8% allocs, 56% instructions, that's huge!
+  - queens: Smallest with significant improvements (-18.2% allocs, -2.9% instr)
+  - rfib: Smallest benchmark, negigible, yet probably localized improvement: -0.2%, +0.0%
+  - x2n1: Small, +0.0, -0.2%. Two nested join points are floated out. No difference in allocation, actually.
+    - **No diff at all, probably in System.Environment.getArgs or read**
+  - tak: 2nd smallest benchmark, negigible, yet probably localized regression: +0.2, 0.0  
+    - **No diff at all, probably in System.Environment.getArgs or read**
+    - Also llf seems to allocate less compared to no-llf... weird wibble
+  - cryptarithm: 14 lines with big improvements (over 2% each)
+  - bernouilli: (0%, -4.9%) Lifts 3 join points, nothing else.
+  - Worst time: reverse-complement (68 lines, +0.1, +18), followed by fish (86, ..., +10)
+  - binary-trees: +6% instr exec: Probably because of register permutations?! Shouldn't be too much of a difference in practice, but maybe we can prevent that from happening?
+- Fix Core Lint warnings about INLINE binding of non-rule loopbreaker
+- Stabilising unfoldings causes things that would have been vanilla unfoldings to have a Tmpl set. Not sure how this plays into interface file sizes.
+- Look into effect systems like CSD, maybe some of them suddenly get viable to use! Talk to Matt about this
+
+## Brainstorming
+
+- LLF is directly opposite to the "manual static arguement transformation", used in e.g. zipWith. That's one reason why we need to stabilize unfoldings (also for recursive bindings!)
+
 
 <!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
