@@ -20,9 +20,9 @@
   - [HaskellWiki on maximal free expression](https://wiki.haskell.org/Maximal_free_expression)
   - Can be traced back to [supercombinators](http://people.bath.ac.uk/masjap/Notes/C73/section3_13.html)
   - https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-75.pdf
-- Silt:
-- FISilt:
-- BSilt: body ?
+- Silt: 
+- FISilt: Free identifier Silt?
+- BSilt: binder Silt?
 - FIIs: DIdEnv FII
 - FII: var + UseInfo. Mnemonic: Free identifier information?!
 - FVUp: Maintains two views on an expression: itself + floats and expression anticipating CorePrep
@@ -32,6 +32,7 @@
 ## TODO
 
 - Abstract over join IDs? We don't want to do that for FloatOut, according to `Note [Free join points]`, but why isn't the (in that case, non-rec, nullary) join point floated to top-level?
+- Similar: How to fare with variables that are abstracted over in RULE RHSs? We add those RHS to `abs_ids` for now, but those RULEs are zapped anyway when it gets floated to top-level, so maybe we should rather fix FloatOut...
 - Benchmarks to investigate:  
   - CSD: All allocs gone! -97% executed instructions.  
     - Reason: A single recursive non-join let (relict of missed fusion opportunity) is lifted
@@ -40,7 +41,12 @@
     - It's always the same: LLF lifts out the local recursive `go` binding in `times`. But the effect is only that dramatic for CSD :o
     - `times`, though exported, is never called. So it's probably somethign else.
     - Also: Why would the different effs have different slowdowns?
-  - Worst: veritas: +8% allocs, 56% instructions, that's huge!
+    - Turns out this is not due to any transformation happening in effs themselves
+  - Worst: veritas: +8% allocs, 56% instructions, that's huge!  
+    - That's due to stabilisation of unfoldings in Edlib.lhs (worsens even when no bindings are lifted)
+    - Unfolding of \$w/:>/ and \$w/>/ differs: augment isn't inlined
+    - But those are NOUSERINLINE... Doesn't anything probably
+    - I think it's an Inliner wibble, although a really terrible one
   - queens: Smallest with significant improvements (-18.2% allocs, -2.9% instr)
   - rfib: Smallest benchmark, negigible, yet probably localized improvement: -0.2%, +0.0%
   - x2n1: Small, +0.0, -0.2%. Two nested join points are floated out. No difference in allocation, actually.
@@ -52,6 +58,9 @@
   - bernouilli: (0%, -4.9%) Lifts 3 join points, nothing else.
   - Worst time: reverse-complement (68 lines, +0.1, +18), followed by fish (86, ..., +10)
   - binary-trees: +6% instr exec: Probably because of register permutations?! Shouldn't be too much of a difference in practice, but maybe we can prevent that from happening?
+  - fib-heaps: +1.4% executed instrs rel. to no-llf (except base), allocations consistently go down
+    - this one is really interesting, as it reveals that register pressure is a limiting factor
+    - join points of huge arity (10) get lifted
 - Fix Core Lint warnings about INLINE binding of non-rule loopbreaker
 - Stabilising unfoldings causes things that would have been vanilla unfoldings to have a Tmpl set. Not sure how this plays into interface file sizes.
 - Look into effect systems like CSD, maybe some of them suddenly get viable to use! Talk to Matt about this
@@ -59,6 +68,18 @@
 ## Brainstorming
 
 - LLF is directly opposite to the "manual static arguement transformation", used in e.g. zipWith. That's one reason why we need to stabilize unfoldings (also for recursive bindings!)
-
+- Do we want to lift join points of arbitrary arity?  
+  - Pros:  
+    - smaller let body, making it amenable for inlining
+    - For non-rec join points: When they aren't inlined, it means they are probably huge and call overhead won't be relevant...
+  - Cons:
+    - An actual call: calling convention
+    - Register permutation (possibly cheap)
+    - Bindings that are already allocated in the heap get copied on the stack (actually they might not, but at least they are loaded into a register)
+    - Register pressure: When there are too many arguments, stuff inevitably gets passed on the stack. Also, variables will need to be spilled. Combined with recursive calls, this may be quite bad, depending on whether the stack frame can be re-used (they could, it was a join point, after all)
+- This might all be more viable if we had custom calling conventions for such internal/static functions  
+  - applicable if all calls are known and saturated (although we could easily arrange entry code that follows the usual calling convention)
+  - this way we can re-use a closure and don't need to pass stuff over the stack, also change register order (main use case probably)
+  - somewhat like a middle-ground between join points and regular functions
 
 <!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
