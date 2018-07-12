@@ -34,37 +34,42 @@
 - Abstract over join IDs? We don't want to do that for FloatOut, according to `Note [Free join points]`, but why isn't the (in that case, non-rec, nullary) join point floated to top-level?
 - Similar: How to fare with variables that are abstracted over in RULE RHSs? We add those RHS to `abs_ids` for now, but those RULEs are zapped anyway when it gets floated to top-level, so maybe we should rather fix FloatOut...
 - Benchmarks to investigate:  
-  - CSD: All allocs gone! -97% executed instructions.  
-    - Reason: A single recursive non-join let (relict of missed fusion opportunity) is lifted
-    - Funny enough, all the other effect systems got slower/execute more instructions without any benefit to allocation
-    - It's even faster than pure strict state. WTF
-    - It's always the same: LLF lifts out the local recursive `go` binding in `times`. But the effect is only that dramatic for CSD :o
-    - `times`, though exported, is never called. So it's probably somethign else.
-    - Also: Why would the different effs have different slowdowns?
+  - [x] CSD: All allocs gone! -97% executed instructions.  
     - Turns out this is not due to any transformation happening in effs themselves
-  - Worst: veritas: +8% allocs, 56% instructions, that's huge!  
+  - [x] Worst: veritas: +8% allocs, 56% instructions, that's huge!  
     - That's due to stabilisation of unfoldings in Edlib.lhs (worsens even when no bindings are lifted)
     - Unfolding of \$w/:>/ and \$w/>/ differs: augment isn't inlined
-    - But those are NOUSERINLINE... Doesn't anything probably
     - I think it's an Inliner wibble, although a really terrible one
-  - queens: Smallest with significant improvements (-18.2% allocs, -2.9% instr)
-  - rfib: Smallest benchmark, negigible, yet probably localized improvement: -0.2%, +0.0%
-  - x2n1: Small, +0.0, -0.2%. Two nested join points are floated out. No difference in allocation, actually.
+    - Solution: Only stabilise if we lifted something
+  - [x] queens: Smallest with significant improvements (-18.2% allocs, -2.9% instr)  
+    - A wibble in the occurrence analyzer makes it so that the same thunk is suddenly detected as single-entry when passed as an argument, but not when accessed as a free variable
+  - [ ] rfib: Smallest benchmark, negigible, yet probably localized improvement: -0.2%, +0.0%
+  - [x] x2n1: Small, +0.0, -0.2%. Two nested join points are floated out. No difference in allocation, actually.
     - **No diff at all, probably in System.Environment.getArgs or read**
-  - tak: 2nd smallest benchmark, negigible, yet probably localized regression: +0.2, 0.0  
+  - [x] tak: 2nd smallest benchmark, negigible, yet probably localized regression: +0.2, 0.0  
     - **No diff at all, probably in System.Environment.getArgs or read**
     - Also llf seems to allocate less compared to no-llf... weird wibble
-  - cryptarithm: 14 lines with big improvements (over 2% each)
-  - bernouilli: (0%, -4.9%) Lifts 3 join points, nothing else.
+  - [ ] cryptarithm: 14 lines with big improvements (over 2% each)
+  - [ ] bernouilli: (+1.6%, +2.7%) Lifts 3 non-rec join points (which would be beneficial), nothing else.  
+    - Seems to be related to `zipWith` (maybe we're undoing manual SAT again?).
   - Worst time: reverse-complement (68 lines, +0.1, +18), followed by fish (86, ..., +10)
   - binary-trees: +6% instr exec, 7.7% mem, with no-llf even:  
-    - Calls to `io` are the culprit here, which is just a proxy for `Data.Printf.printf`. **Investigate!**
+    - https://ghc.haskell.org/trac/ghc/ticket/15333
   - fib-heaps: +1.4% executed instrs rel. to no-llf (except base), allocations consistently go down
     - this one is really interesting, as it reveals that register pressure is a limiting factor
     - join points of huge arity (10) get lifted
+  - pic: +1.0% alloc compared to no-llf
+    - Goes away with -fllf-rec-lam-limit=3
+    - Probably due to insufficient stg fast app variants: there is one call with ppppnnv and another with pppnnv (I think)
+    - This will be emulated by PAPs, leading to an increase in allocations (which normally shouldn't be possible, except for PAPs)
+    - Both calls would be caught if we didn't lift functions which would have arity > 5 (the number of argument registers)
+  - mate: Has a benchmark somewhere that profits from no bounds on non-join non-rec bindings  
+    - So we should lambda lift non-join non-rec bindings regardless of result arity
 - Fix Core Lint warnings about INLINE binding of non-rule loopbreaker
-- Stabilising unfoldings causes things that would have been vanilla unfoldings to have a Tmpl set. Not sure how this plays into interface file sizes.
-- Look into effect systems like CSD, maybe some of them suddenly get viable to use! Talk to Matt about this
+- Stabilising unfoldings causes things that would have been vanilla unfoldings to have a Tmpl set. Not sure how this plays into interface file sizes.  
+  - Mostly fixed by only stabilising unfoldings of functions where we lifted something out
+- Look into effect systems like CSD, maybe some of them suddenly get viable to use! Talk to Matt about this  
+  - Unlikely, was just a wibble due to cross module specialisation
 
 ## Brainstorming
 
@@ -82,5 +87,19 @@
   - applicable if all calls are known and saturated (although we could easily arrange entry code that follows the usual calling convention)
   - this way we can re-use a closure and don't need to pass stuff over the stack, also change register order (main use case probably)
   - somewhat like a middle-ground between join points and regular functions
+  - Actually, we can extend this: Morally lift all functions to top-level, only assuming they have a specific closure (part of the calling convention) with constant args  
+    - When there's only a single syntactic call to the function, we could re-use closures at the expense of more live garbage (in case of a join point, but that's the case now anyway?!)
+    - Alternatively, callers could arrange their closure in such a way that the callees closure is a sub-struct (probably won't play along with the RTS)
+- Do we want to lift recursive functions in general?
+  - Generally: Yes, as long as we don't "spill" arguments
+  - When we do, it really depends:
+    - If the function is a join point (meaning we wouldn't need to place static args/the former closure on the stack), we can still lift
+    - If the function is not a join point (e.g. we can't re-use stack frames), we incur an overhead on each call by having to push all static args all over again (verify this). It's stack allocation, but memory accesses aren't free nonetheless ==> Don't do this!
+- Do we want to lift nonrec functions in general?  
+  - Generally: Yes, as long as it's not a small join point
+  - For non-join points we can assume it's a big function, so call overhead is negligible
+  - As long as the closure isn't too big (how many lambdas?), we can lift it to top-level for smaller code size  
+    - In fact, `mate` proves this should be beneficial regardless of arity (there should be some non-join, non-rec function of arity > 10)
+    - ~~But actually, this is just the 'calling conventoin' from above, with less benefits~~ No it isn't, that part can only apply to join points
 
 <!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
