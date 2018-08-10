@@ -102,4 +102,15 @@
     - In fact, `mate` proves this should be beneficial regardless of arity (there should be some non-join, non-rec function of arity > 10)
     - ~~But actually, this is just the 'calling conventoin' from above, with less benefits~~ No it isn't, that part can only apply to join points
 
+# On STG
+
+## TODO
+
+- Compare to WWs arg limit
+- Make register limit platform dependent
+- Investigate the following benchmarks (all allocs go down):  
+  - [x] k-nucleotide: counted instructions and perceived speed go up by 3%  
+    - I'm not sure why, lifting should yield strictly better code... Maybe some code-gen issue? Loads get converted into leas and indirect subs in `sat_sdes`...
+    - `-fllvm -optlo -Os` makes the difference go away. Probably related to [section 5.2.10 of the valgrind manual](http://valgrind.org/docs/manual/cg-manual.html)
+
 <!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
