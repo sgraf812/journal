@@ -112,5 +112,22 @@
   - [x] k-nucleotide: counted instructions and perceived speed go up by 3%  
     - I'm not sure why, lifting should yield strictly better code... Maybe some code-gen issue? Loads get converted into leas and indirect subs in `sat_sdes`...
     - `-fllvm -optlo -Os` makes the difference go away. Probably related to [section 5.2.10 of the valgrind manual](http://valgrind.org/docs/manual/cg-manual.html)
+  - [x] CSD: Runtime went up by 12%  
+    - Probably some code alignment thing: -fllvm shows exactly the inverse
+  - [ ] Parser: Instructions up by 12% (runtime probably the same)  
+    - Regression hides somewhere in base
+  - [ ] binary-trees: instruction count seems to be non-deterministic (wtf)
+  - [x] bspt: 3.4%ci instead of -3.4% when not lifting the no-brainer in `MGRLib.command`
+    - Isolating `command` into its own module makes it faster/execute less instructions
+    - Runtime results are meaningless because to fast
+    - The size of the heap seems to affect this... Setting +RTS -A100M/H32M makes the speedups consistent
+    - Appearently, we just trigger the GC at a bad time, when the working set is relatively large. Varying `-A size` has random effects
+  - After taking GC out of the equation with -A128M/H1G:
+  - [ ] puzzle: +4.7%ci for `-fllvm -optlo -Os`  
+    - Difference goes away with `-fno-stg-lift-lams`
+    - No difference for NCG either
+    - Same absolute difference for just `-fllvm`
+- Test the effect of individual heuristics  
+  - known to unknown calls seems neglible, with the tendency to worsen things (+0.0% with +3.8%ci in cacheprof, +1.5%a in rewrite, which might be outliers)
 
 <!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
