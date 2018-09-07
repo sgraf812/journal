@@ -114,9 +114,11 @@
     - `-fllvm -optlo -Os` makes the difference go away. Probably related to [section 5.2.10 of the valgrind manual](http://valgrind.org/docs/manual/cg-manual.html)
   - [x] CSD: Runtime went up by 12%  
     - Probably some code alignment thing: -fllvm shows exactly the inverse
-  - [ ] Parser: Instructions up by 12% (runtime probably the same)  
+  - [?] Parser: Instructions up by 12% (runtime probably the same)  
     - Regression hides somewhere in base
-  - [ ] binary-trees: instruction count seems to be non-deterministic (wtf)
+    - Maybe also a GC artifact as in bspt?
+  - [x] binary-trees: instruction count seems to be non-deterministic (wtf)  
+    - same as bspt: GC
   - [x] bspt: 3.4%ci instead of -3.4% when not lifting the no-brainer in `MGRLib.command`
     - Isolating `command` into its own module makes it faster/execute less instructions
     - Runtime results are meaningless because to fast
@@ -129,5 +131,56 @@
     - Same absolute difference for just `-fllvm`
 - Test the effect of individual heuristics  
   - known to unknown calls seems neglible, with the tendency to worsen things (+0.0% with +3.8%ci in cacheprof, +1.5%a in rewrite, which might be outliers)
+
+## Playing around with different parameters
+
+### Allowing (more) recursive args
+
+- 0 instead of 5 (still lifting 5 arg nonrecs): Complete disaster, we should definitely lift recursive things.  
+  - Also shows where nonrecs are lifted beneficially: In `mate` (-2.4% allocs, -0.4% ci) and `power` (-0.7% both)
+  - Total change, compared to no lifting: -0.1%, -0.0% (so, negligible) (+0.7 etc. compared to 5-5)
+- 6 instead of 5 allowed better performance in `fibheaps` (-0.5% in both allocs and instructions). -0.0% overall  
+  - That was due to a void parameter that doesn't really contribute a runtime argument. adjusted our metric, now it is optimised
+- 8 instead of 6: No real change
+- 10 instead of 8: -7.7% allocs in `mandel`, but +0.3% ci (probably not worth it?)
+- Overall: 8 seems like a sweet spot. -0.1% allocs, -0.0% ci
+- So: Investigate `fibheaps`
+
+### Allowing (more) nonrec args
+
+- 0 instead of 5 (still lifting 5 arg recs):  
+  - Doesn't lift `n-body` any longer, so it's only lifted when we both lift recs and nonrecs
+  - `n-body` accounts for +25% allocs, the second largest is only 2.6%
+  - Total change, compared to 5-5: +0.3%, +0.0%, so rather negligible
+- 6 instead of 5: Min -0.2% in allocs (no wonder), but max 0.2% in ci. +0.0% overall
+- 8 instead of 6: -10.4% allocs in cicelli. overall -0.1% allocs but +0.0% ci
+- 10 instead of 8: -0.7% allocs in mate, but +1.0% ci. also simple with -0.9/-0.1 (investigate?)
+- Generally: neglible effect, -0.1% allocs, +0.0% ci
+
+### Allowing more args in general
+
+- 8-8 compared to 5-5: -0.1%, -0.0%  
+  - Has the `fibheaps` speedup from 6-5 as well as a new one: `cichelli`, bringing no advantage in ci but -10.4% in allocs
+
+### Allowing unknown calls
+
+- Two winners: `rewrite`. -1.5% allocs, -0.1% ci and `mate`: -0.9% allocs, -0.1% ci.
+- Mostly irrelevant regressions otherwise, total -0.0% in both allocs and ci
+- might be worth it?! Or at least we should identify why there are some moderate improvements
+- Only the first of several calls is unknown, all recursive ones are unaffected
+- Maybe only care for non-recursive calls?
+- [ ] `mate`:  
+  - Actually visible changes in the benchmark itself... Seems like exactly the case we don't want (e.g. turning known into unknown call)
+  - Yet it executes less instructions
+- [ ] `rewrite`:  
+  - changes (-1.5% alloc) somewhere in base
+
+## What's the advantage of turning heap into stack allocation?
+
+- The working set (e.g. the residency) stays the same
+- But things on the stack don't have to be copied
+- (On the other hand, it's harder to know which stuff on the stack is really 'alive')? maybe
+  - might possibly lead to a larger residency?
+- That stack allocation on each call might blow up the stack?
 
 <!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
