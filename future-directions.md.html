@@ -1,0 +1,75 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Future directions for Optimizing Compilers
+
+- Manifesto
+- Tackles/asks questions such as  
+  - Why are compilers slow?
+  - Why are compilers wrong?
+  - Why is the quality of generated code sometimes poor?
+- Spoiler: use compiler-compilers  
+  - Synthesize optimizations from declarative specifications
+  - Synthesize these specifications from formal semantics of IR/target/source language
+
+# Thesis 1
+
+- Major components of future compilers will be generated with the help of SMT solvers, verified correct and exhaustively optimizing
+- decl language + CEGIS for new (exhaustive) optimizations
+- Runtime of optimizer should be *sub*-linear function
+- Bummer: Hand-written peephole optimizers (libFirm 8000cloc, LLVM over 30000)
+- Reason: Efficiency ($\rightarrow$ subtree automaton)
+- Case Study 1: Declarative peephole opt for LLVM  
+
+# Thesis 2
+
+- Specify rules, machine characteristics in declarative formats
+- Allows rapid update and independent checking
+- introduces Alive as that declarative format
+- Case Study 2: Super Optimizing LLVM (Souper)
+- Talks about generalising optization patterns found with SMT  
+  - e.g. substitute all constant occurrences with meta variables
+  - infer weakest liberal preconditions for the validity of the given optimization (Alive-Infer)
+  - data-driven!
+
+# Thesis 3
+
+- Declarative specifications are an appropriate interface between offline tools and the compiler
+- Automate more of the compiler in this way, not just IR2IR
+
+# Thesis 4
+
+- Every IR and every translation between reps is an opportunity for superoptimization
+- Static analyses can be viewed as ad-hoc, domain-specific automated theorem provers
+- Generate static analysis rules: SMT solvers can generate the most precise transfer function implementing the analysis
+
+# Thesis 5
+
+- Data-driven approach to solving hard and soft problems in compilers
+- GCC developer: "it’s like piloting a supertanker -- we can steer, but it takes a really long time to change direction."
+- Soft problem: Phase problem, compilation time/runtime improvements  
+  - Combinatorial optimization/ML
+- Hard problem: Correctness of analysis/transformation  
+  - ATP
+- Rapid retuning once data (e.g. times, architectures) changes  
+  - Example: Inliner, tuned for C++, but MSP430 has code size requirements
+  - Sloooow, but still lower cost than engineering effort required
+
+# Thesis 6
+
+- ISAs, IRs and PLs should have formal semantics
+- extraction of tools (parsers, ...)
+- translation validation, paying the price only for high confidence users (avionics) etc.
+- also for compiler 'testing'
+
+# Pushing solver-based constraints further
+
+- Integrated/interleaved analysis are hard to define, but SMT solvers can recognize these special cases
+- global optima, idioms -- SMT solvers can recognize these much more reliably
+- data structure synthesis (e.g. synthesizing stuff like SmallVector)
+- user-defined domain-specific optimizations (e.g. RULEs)
+
+# Next-Generation IRs
+
+- Adding new IR ops means updating analyses and backends. Solver only needs to know the semantics
+- Less pointer chasing desired, packed data structures
+- Solver-based backends like sea of nodes, e.g. more abstract, IRs
