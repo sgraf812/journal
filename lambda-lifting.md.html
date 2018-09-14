@@ -1,0 +1,43 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Lambda lifting: Transforming Programs into Recursive Equations
+
+- http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.48.4346
+- 3 Attempts:  
+  1. Transform lets to lambdas + Y. Spoils known calls
+  2. Don't transform lets: RHS are still PAPs to supercombinators
+  3. Apply supercombinators at *call sites* to their free variables, don't retain bindings. Success!
+- How to compute the arguments in one pass?  
+  - Transitive closure over call/occurrence relationship, then merge free variables
+  - $\mathcal{O}(n^3)$, but disregarding lexical scope, so not happening in practice
+  - lexical scope (call relationship!) leads to a natural top-down algorithm
+
+## Algorithm
+
+1. Make all Ids unique
+2. Give each lambda expression a fresh name
+3. Traverse top-down. For each rec group, compute the set of variables to be abstracted out, as follows. What we know:  
+   - $vars$ in scope, possibly occuring free in letrec.
+   - $funs$: processed functions, for which we know its former free variables to be supplied at call sites
+   - $sol$: Solutions for the function names in $funs$
+4. Now  
+   a) Set of equations $E_f = S_f \cup E_g \cup E_h ...$ (these are all variables needed at call sites) where  
+      - $g, h, ...$ functions called by $f$
+      - $S_f = vars \cap fvs(rhs) \cup E_{o_1} \cup ... \cup E_{o_n}$ unknown variables occuring int the body
+      - $o_1, ..., o_n \in funs \cap fvs(rhs)$ any outer functions called -- we need their former free variables
+   b) Solve
+   c) descend with  
+      - $vars := vars \cup \text{unfloated stuff, like thunks}$
+      - $funs := func \cup \text{lifted bindigs}$
+      - $sol := sol \cup {(f, E_f), ...}$ (add lifted bindings)
+5. Perform substitutions  
+   - At definition sites $f_i = e \Rightarrow f_i = \lambda x_1 ... x_m. e$
+   - At occurrences $f_i \Rightarrow f_i x_1 ... x_m$
+6. Lift out definitions to top-level
+
+## Attribute grammar + impl
+
+- LC with letrec
+- makes use of lazy eval
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
