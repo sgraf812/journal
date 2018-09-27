@@ -1,0 +1,89 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Types are Calling Conventions
+
+Argues that it might be worthwhile to capture multiple returns and arguments in the type system, as well as strictness/evaluatedness
+
+# Examples
+
+## Strict arguments
+
+- higher-order calls such as the call to `f` in `map f [1,2,3]` need to wrap their argument even if it's evaluated strictly (under the assumption that inlining doesn't reveal `f`s definition)
+- Tracking strictness could help here (not yet read the solution to this, but specialisation seems not an option because code bloat)
+
+## Multiple arguments
+
+- `zipWith f xs ys`: Propagate the information that `f` is always called with two arguments
+- Already handled by usage analysis nowadays
+
+## Optionally-strict source languages
+
+- Talks about the problem of how to represent `[!Int]`, lists of certainly evaluated `Int`s
+- Seems like it's not about unboxing (indeed, it isn't); levity polymorphism for arbitrary data constructors incurs code duplication à la C++ or C# (which might actually not be so bad)
+
+## Multiple results
+
+- Multiple results are returned on the heap, so allocation
+- But there are unboxed tuples and even sums now
+- As evident by section 5.4, the authors are aware, but "his extension has never fitted neatly into the type system of the intermediate language"
+
+# Language
+
+- Strict STLC in ANF with multiple args und return values with the obvious semantics
+- Is basically typed STG
+
+## Thunks
+
+- Strictness means we have to embed thunks in some way
+- Uses the STG formulation. Strict typed STG, basically
+- Notation: `{Int}` for lazy `Int`, which is strict by default
+- ~~Side note: The function `a:* -> {a}` is not injective (see the type of `(,)` for example), because {{a}} should be lowered just as {a}. So `(,) <Int, Int>` and `(,) {Int} {Int}` should be the same type. Problems ensue?!~~ Actually, this has other semantics, it seems. There actually is `{{a}}`, as used in section 5.5
+
+# Putting Strict Core to Work
+
+## Expressing calling convention
+
+- This allows to WW for strictness without necessarily unboxing things!
+- That's an actual novelty and might help with things
+- To optimize the `map f` case, this assumes that *every* function on lazy things has a strict counterpart, e.g. that every lazy function is implicitly WW'ed
+- Sounds like lazy functions only differ in that they have an entry point forcing things
+
+## Multiple results
+
+- Can be achieved today with unboxed tuples
+- The authors are aware but argue (rightly, so) that multiple return values is more principled
+
+## Redundant evaluation
+
+- Using CSE to avoid evaluating expressions twice seems like a cool idea
+
+## Thunk eliminaition
+
+- Home-made problem with elegant solution
+- Auto-lifting for treating `Int` as `{Int}` by the runtime
+- Auto-lifting thunks doesn't work because of $\bot$
+- Only auto-lift non-polymorphic, non-thunk types
+
+## Deep unboxing
+
+- Can express strictness inside thunks now, e.g. `{({Int}, {Int})} => {Int, Int}` for `\t -> if ... then 1 else fst t + snd t`
+
+# Arity raising
+
+- multiple arguments allows arity raising via WW, neat!
+- Also the wrapper might not always inline, which could be OK if it does on the hot path
+- Arity information is encoded in the type instead of an annotation, which might be wrong
+- Doesn't attempt at all to solve the higher-order case, which requires a usage analysis
+- **Worse: If a function encodes that it calls its argument with two arguments, its argument is incompatible with functions of arity 1!!**  
+  - which means the wrapper won't always cancel... But then again, there are 
+  - Also what if we call `zipWith` with a ternary function? This will first have to provide a curried form to call `zipWith`. Then this curried form will first call the worker with a wrapper for the function that applies the functions wrapper to 2 args, in part canceling the last transformation. Yuck!!!
+  - The status quo is that this happens in the runtime with eval/apply, which only needs a single wrapper PAP rather than 2
+- There is a possible advantage in that we could have a simpler variant of the generic apply functions only concerned with 2 arguments, a single branch of the generic apply function `stg_ap_pp`, so to say.
+- Having this in the type system means unnecessary conversions between arities, which may not even carry over to runtime
+- Or does this just split a little of the work of `stg_ap_pp` into the type system?!! hmm... Still, it does seem to allocate unnecessary PAPs
+- Needless to say: We could have the same if we performed the WW transformation in todays GHC, by having `let g' x y = g x y` and simplifiy if `g` has arity 2 anyway
+- The information is comfortably encoded in `idArity` and there will *always* be cases where the arity is unknown. Just falling back to inserted currying and uncurrying functions doesn't cut it, because it does unecessary work. This is where the dynamic arity checks for unknown calls are far cheaper than the code generated in this model.
+- Yes, this gets rid of the dynamic arity checks, but for much worse code with calling convention conversions everywhere
+
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
