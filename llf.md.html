@@ -2,108 +2,6 @@
 
 # Late Lambda Lifting
 
-## Floating join points
-
-- Relevant Notes:  
-  - `Note [Lifting LNEs]` (from LLF before rebase)
-  - `Note [Join ceiling]`: The level after which a join point is destroyed
-  - `Note [Floating join point bindings]`: join points should not be destroyed, except if floated to top-level (compare to the wiki page on SequentCore). Contrary to wiki, for recursive bindings even (probably if big enough)
-  - `Note [Free join points]`: Never float a MFE that has a free join Id
-- The Float Out section of [the wiki page on SequentCore](https://ghc.haskell.org/trac/ghc/wiki/SequentCore)  
-  - Float non-recursive join points to top-level. On the grounds that if it was to be big to be inlined anyway, there would be no point in having it in `f`, because there would never be any case context exposed. Doesn't apply to recursive JPs
-- Compare lifting join points to Outlining: take the common pattern, lift it to top-level so that the resulting expression gets smaller. Only the 'find other common join points' part is missing. Could be rectified by a global CSE pass
-- Ideally, the only difference between a join point and the corresponding lifted top-level function is that the caller needs to pass free variables in registers (or on the stack, once). No new continuation needs to be pushed, as the callee will jump to the outer continuation when finished. The callee could of course do `call <lifted-jp>; retn`, but that's equivalent to a `jmp <lifted-jp>`. The call was in tail-position, after all. So, as long as register pressure isn't an issue, everything is fine, modulo a few `mov`s.
-
-## Nomenclature
-
-- MFE: Maximal free expression (not documented *anywhere*, except a short mention under the sig of `lvlExpr`)  
-  - [HaskellWiki on maximal free expression](https://wiki.haskell.org/Maximal_free_expression)
-  - Can be traced back to [supercombinators](http://people.bath.ac.uk/masjap/Notes/C73/section3_13.html)
-  - https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-75.pdf
-- Silt: 
-- FISilt: Free identifier Silt?
-- BSilt: binder Silt?
-- FIIs: DIdEnv FII
-- FII: var + UseInfo. Mnemonic: Free identifier information?!
-- FVUp: Maintains two views on an expression: itself + floats and expression anticipating CorePrep
-- UseInfo: 4 flags: unapplied, undersat, exactly sat, oversat
-- cgil: clo growth in lam
-
-## TODO
-
-- Abstract over join IDs? We don't want to do that for FloatOut, according to `Note [Free join points]`, but why isn't the (in that case, non-rec, nullary) join point floated to top-level?
-- Similar: How to fare with variables that are abstracted over in RULE RHSs? We add those RHS to `abs_ids` for now, but those RULEs are zapped anyway when it gets floated to top-level, so maybe we should rather fix FloatOut...
-- Benchmarks to investigate:  
-  - [x] CSD: All allocs gone! -97% executed instructions.  
-    - Turns out this is not due to any transformation happening in effs themselves
-  - [x] Worst: veritas: +8% allocs, 56% instructions, that's huge!  
-    - That's due to stabilisation of unfoldings in Edlib.lhs (worsens even when no bindings are lifted)
-    - Unfolding of \$w/:>/ and \$w/>/ differs: augment isn't inlined
-    - I think it's an Inliner wibble, although a really terrible one
-    - Solution: Only stabilise if we lifted something
-  - [x] queens: Smallest with significant improvements (-18.2% allocs, -2.9% instr)  
-    - A wibble in the occurrence analyzer makes it so that the same thunk is suddenly detected as single-entry when passed as an argument, but not when accessed as a free variable
-  - [ ] rfib: Smallest benchmark, negigible, yet probably localized improvement: -0.2%, +0.0%
-  - [x] x2n1: Small, +0.0, -0.2%. Two nested join points are floated out. No difference in allocation, actually.
-    - **No diff at all, probably in System.Environment.getArgs or read**
-  - [x] tak: 2nd smallest benchmark, negigible, yet probably localized regression: +0.2, 0.0  
-    - **No diff at all, probably in System.Environment.getArgs or read**
-    - Also llf seems to allocate less compared to no-llf... weird wibble
-  - [ ] cryptarithm: 14 lines with big improvements (over 2% each)
-  - [ ] bernouilli: (+1.6%, +2.7%) Lifts 3 non-rec join points (which would be beneficial), nothing else.  
-    - Seems to be related to `zipWith` (maybe we're undoing manual SAT again?).
-  - Worst time: reverse-complement (68 lines, +0.1, +18), followed by fish (86, ..., +10)
-  - binary-trees: +6% instr exec, 7.7% mem, with no-llf even:  
-    - https://ghc.haskell.org/trac/ghc/ticket/15333
-  - fib-heaps: +1.4% executed instrs rel. to no-llf (except base), allocations consistently go down
-    - this one is really interesting, as it reveals that register pressure is a limiting factor
-    - join points of huge arity (10) get lifted
-  - pic: +1.0% alloc compared to no-llf
-    - Goes away with -fllf-rec-lam-limit=3
-    - Probably due to insufficient stg fast app variants: there is one call with ppppnnv and another with pppnnv (I think)
-    - This will be emulated by PAPs, leading to an increase in allocations (which normally shouldn't be possible, except for PAPs)
-    - Both calls would be caught if we didn't lift functions which would have arity > 5 (the number of argument registers)
-  - mate: Has a benchmark somewhere that profits from no bounds on non-join non-rec bindings  
-    - So we should lambda lift non-join non-rec bindings regardless of result arity
-- Fix Core Lint warnings about INLINE binding of non-rule loopbreaker
-- Stabilising unfoldings causes things that would have been vanilla unfoldings to have a Tmpl set. Not sure how this plays into interface file sizes.  
-  - Mostly fixed by only stabilising unfoldings of functions where we lifted something out
-- Look into effect systems like CSD, maybe some of them suddenly get viable to use! Talk to Matt about this  
-  - Unlikely, was just a wibble due to cross module specialisation
-
-## Brainstorming
-
-- LLF is directly opposite to the "manual static arguement transformation", used in e.g. zipWith. That's one reason why we need to stabilize unfoldings (also for recursive bindings!)
-- Do we want to lift join points of arbitrary arity?  
-  - Pros:  
-    - smaller let body, making it amenable for inlining
-    - For non-rec join points: When they aren't inlined, it means they are probably huge and call overhead won't be relevant...
-  - Cons:
-    - An actual call: calling convention
-    - Register permutation (possibly cheap)
-    - Bindings that are already allocated in the heap get copied on the stack (actually they might not, but at least they are loaded into a register)
-    - Register pressure: When there are too many arguments, stuff inevitably gets passed on the stack. Also, variables will need to be spilled. Combined with recursive calls, this may be quite bad, depending on whether the stack frame can be re-used (they could, it was a join point, after all)
-- This might all be more viable if we had custom calling conventions for such internal/static functions  
-  - applicable if all calls are known and saturated (although we could easily arrange entry code that follows the usual calling convention)
-  - this way we can re-use a closure and don't need to pass stuff over the stack, also change register order (main use case probably)
-  - somewhat like a middle-ground between join points and regular functions
-  - Actually, we can extend this: Morally lift all functions to top-level, only assuming they have a specific closure (part of the calling convention) with constant args  
-    - When there's only a single syntactic call to the function, we could re-use closures at the expense of more live garbage (in case of a join point, but that's the case now anyway?!)
-    - Alternatively, callers could arrange their closure in such a way that the callees closure is a sub-struct (probably won't play along with the RTS)
-- Do we want to lift recursive functions in general?
-  - Generally: Yes, as long as we don't "spill" arguments
-  - When we do, it really depends:
-    - If the function is a join point (meaning we wouldn't need to place static args/the former closure on the stack), we can still lift
-    - If the function is not a join point (e.g. we can't re-use stack frames), we incur an overhead on each call by having to push all static args all over again (verify this). It's stack allocation, but memory accesses aren't free nonetheless ==> Don't do this!
-- Do we want to lift nonrec functions in general?  
-  - Generally: Yes, as long as it's not a small join point
-  - For non-join points we can assume it's a big function, so call overhead is negligible
-  - As long as the closure isn't too big (how many lambdas?), we can lift it to top-level for smaller code size  
-    - In fact, `mate` proves this should be beneficial regardless of arity (there should be some non-join, non-rec function of arity > 10)
-    - ~~But actually, this is just the 'calling conventoin' from above, with less benefits~~ No it isn't, that part can only apply to join points
-
-# On STG
-
 ## TODO
 
 - Compare to WWs arg limit
@@ -112,23 +10,6 @@
   - [x] k-nucleotide: counted instructions and perceived speed go up by 3%  
     - I'm not sure why, lifting should yield strictly better code... Maybe some code-gen issue? Loads get converted into leas and indirect subs in `sat_sdes`...
     - `-fllvm -optlo -Os` makes the difference go away. Probably related to [section 5.2.10 of the valgrind manual](http://valgrind.org/docs/manual/cg-manual.html)
-  - [x] CSD: Runtime went up by 12%  
-    - Probably some code alignment thing: -fllvm shows exactly the inverse
-  - [?] Parser: Instructions up by 12% (runtime probably the same)  
-    - Regression hides somewhere in base
-    - Maybe also a GC artifact as in bspt?
-  - [x] binary-trees: instruction count seems to be non-deterministic (wtf)  
-    - same as bspt: GC
-  - [x] bspt: 3.4%ci instead of -3.4% when not lifting the no-brainer in `MGRLib.command`
-    - Isolating `command` into its own module makes it faster/execute less instructions
-    - Runtime results are meaningless because to fast
-    - The size of the heap seems to affect this... Setting +RTS -A100M/H32M makes the speedups consistent
-    - Appearently, we just trigger the GC at a bad time, when the working set is relatively large. Varying `-A size` has random effects
-  - After taking GC out of the equation with -A128M/H1G:
-  - [ ] puzzle: +4.7%ci for `-fllvm -optlo -Os`  
-    - Difference goes away with `-fno-stg-lift-lams`
-    - No difference for NCG either
-    - Same absolute difference for just `-fllvm`
 - Test the effect of individual heuristics  
   - known to unknown calls seems neglible, with the tendency to worsen things (+0.0% with +3.8%ci in cacheprof, +1.5%a in rewrite, which might be outliers)
 
@@ -174,6 +55,11 @@
   - Yet it executes less instructions
 - [ ] `rewrite`:  
   - changes (-1.5% alloc) somewhere in base
+
+### Turning off closure growth checks
+
+- 0.1% faster in the mean, but severe and unexpected regressions in allocations (+31% in wheel-sieve1)
+- See https://ghc.haskell.org/trac/ghc/ticket/9476#comment:76
 
 ## What's the advantage of turning heap into stack allocation?
 
