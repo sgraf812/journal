@@ -10,6 +10,11 @@
   - [x] k-nucleotide: counted instructions and perceived speed go up by 3%  
     - I'm not sure why, lifting should yield strictly better code... Maybe some code-gen issue? Loads get converted into leas and indirect subs in `sat_sdes`...
     - `-fllvm -optlo -Os` makes the difference go away. Probably related to [section 5.2.10 of the valgrind manual](http://valgrind.org/docs/manual/cg-manual.html)
+  - [x] +5.8% runtime in `fft2`, but -0.6% ci  
+    - I'm not sure why this slows down. The difference is up to 80% whenever excluding a single (not two) variable from being lifted
+    - Goes away with `-fllvm`
+    - Goes away when we allow turning known into unknown calls
+    - Probably related to code layout
 - Test the effect of individual heuristics  
   - known to unknown calls seems neglible, with the tendency to worsen things (+0.0% with +3.8%ci in cacheprof, +1.5%a in rewrite, which might be outliers)
 
