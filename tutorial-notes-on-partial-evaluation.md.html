@@ -1,0 +1,80 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+**Tutorial notes on partial evaluation**
+
+# Introduction
+
+- "Partial evaluation removes layers of interpretation"
+- Interpreter = Program whose control-flow is determined by input data
+- `printf` example: Specialise for format string
+
+# Principles and Practics of PE
+
+- Specialising function $\mathcal{S}$ specialises a program for static part of input
+- Residual program = Residualisation = program specialised for some static input
+- $\mathcal{S}$ is computable according to Kleene, resulting program is called a PE
+- PE = unfolding+specialisation
+- all input static => PE must include an interpreter
+- all input dynamic => PE must include a compiler (or Id in source-to-source)
+- performs constant prop, inlining (related to sparse conditional const prop)
+- monovariant (single specialisation of a given function) vs. polyvariant (many specialisations)
+- online (monolithic) vs. offline (staged) PEs  
+  - online: non-standard interpreter => accurate, but high overhead
+  - offline: preprocessing (binding-time analysis) + processing (specialisation) phase
+- binding-time analysis (BTA): Which part of a program is static, which is dynamic?  
+  - binding-time as in early or late bound, statically or dymanically bound
+  - approximate
+  - handle HOFs and data structures
+  - polyvariant
+- Shift interpretation of binding-times from processing to preprocessing, simpliying the specialiser (???)
+- Combine online and offline => Online specialisation when binding-time property can't be determined  
+  - Concrete values are available at specialisation time
+- Has been formalised: binding-time analysis is abstraction of the online partial-evaluation semantics
+- Specialising for some of its input = Given the value of some parameters, ...
+- Can be generalised to projections for static and dynamic inputs
+
+# "State of the Art"
+
+- Fuse: online PE using graph IR  
+  - From "Automatic Online Evaluation":  
+    - "Fuse is designed primarily as an interpreter and secondarily as a program transformer. The specialised program is generated almost as an afterthought to interpretation."
+    - Symbolic execution. Symbolic value have both a value and a code attribute
+    - Major difference to interpreters in handling of if's and call's
+    - Focus no longer on self-application (which is unviable?), target programs not written with specialisation in mind. so online makes sense?
+- Bondorf, Similix: offline PE, self-applicable, fixed specilisation strategy
+- Consel, Schism: Offline, polyvariant, HOFs, "flexible strategy"
+
+# Termination
+
+- Two sources in which specialisers might diverge: Unfolding calls indefinitely or unlimited number of specialisations (residualisations)
+  - There are cases in practice where we want the fixed-point
+  - Strategies:  
+    - Programmer-supplied annotations (lame)
+    - BTA for automatic annotations. Dynamic scrutinee, all procedure calls unfolded (?!)
+    - Schism: Filters for each function, specifying under which conditions the call should be unfolded, which parameters calls should be specialised for. Can also be automatically generated
+
+# Data vs. Code
+
+- Space vs. time... Too many specialisations, too much space, yada
+
+# Some Concrete Applications
+
+## Pattern Matching
+
+- Obtain KMP through specialisation of naive string matching for needle
+- But resulting program is big; Shift table in data means being able to re-use the same code path. Impact?
+
+## Microkernels
+
+- Specialisation to regain performance of monolithic kernel
+
+# (Interesting) References
+
+- 109!
+- Binding time analysis for high order untyped functional languages
+- A polyvariant binding time analysis handling partially known values
+- Higher-order partial evaluation
+- Binding-time Analysis: Abstract Interpretation versus Type Inference
+- Using Types to Avoid Redundant Specialisation
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
