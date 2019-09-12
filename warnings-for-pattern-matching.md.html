@@ -1,0 +1,77 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Warnings for Pattern Matching
+
+Discusses pattern match exhaustiveness and redundancy checking for OCaml and
+Haskell. Compared to GHC, it can't cope with empty types (assumes every type is
+inhabited), type evidence, pattern synoyms and COMPLET sets, but with
+or-patterns.
+
+## Part One: Algorithm
+
+Introduces value and pattern syntax (comes up with the term "value vector"),
+then understands pattern matches as a matrix on which "covered" and "redundant"
+patterns get an appropriate meaning. Defines the algorithm in terms of
+"rewrites"/transformations on the pattern matrix.
+
+### Useful clauses problem in a strict language
+
+Realises that order of patterns is unimportant for exhaustiveness checks (i.e.
+the uncovered set at the end is still the same). Gives an implementation of a a
+function $\mathcal{U(P, \vec{p}}$ which decides whether a pattern vector
+$\vec{p}$ is a useful addition (i.e. would match something) to $P$.
+
+The only really interesting case of $\mathcal{U}_{rec}$ is the one for wildcard
+patterns. Apparently they check whether the constructors in the heads of the
+pattern matrix form a complete signature and if so recurse accordingly. But
+they don't even bother to check nested matches when they *don't* form a
+complete signature (in which case they just discard patterns headed by a
+constructor, leaving only potential wildcard matches)! They get away with it
+because they are just using the Yes/No result. But their algorithm wouldn't
+report `Just False`, only `Nothing`, as missing case for
+
+```
+f :: Maybe Bool -> ()
+f (Just True) = ()
+```
+
+As a result, the algorithm computing $\mathcal{M}$ based on $\mathcal{U}_{rec}$
+seems pretty inefficient, because it has to call $\mathcal{U}_{rec}$ for every
+enumerated pattern it could come up with. There is no easy way of finding the
+*minimal* uncovered pattern.
+
+### Lazy stuff
+
+The section on laziness is based on a completely bogus intuition of laziness.
+According to the paper, $\bot$ only matches wildcards. That's clearly nonsense,
+given that
+
+```
+case x of True -> (); False -> ()
+```
+
+Is a complete match in Haskell. Laziness becomes only important for patterns of arity > 1.
+
+## Part Two: Implementation
+
+$\mathcal{I}$ seems to be a much more sensible implementation, using wildcards
+everywhere, but still suffers from the same unsoundness as above.
+
+(Skipping section 6, which seems unimportant)
+
+### Performance
+
+Claims quadratic performance. Mostly points to Sekar et als proof of NP-completeness.
+Implements two safeguards:
+
+1. Delete rows which are subsumed by other row
+2. Can also delete incompatible rows to begin with
+
+That still doesn't rule out exponential behavior, so no idea why they are doing this.
+Apparently it helps for some of the experiments (Experiment T) they conducted.
+
+## Conclusion
+
+They claim that GHC performs bad in Experiments T, V, S. TODO: Investigate!
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
