@@ -74,4 +74,93 @@ Apparently it helps for some of the experiments (Experiment T) they conducted.
 
 They claim that GHC performs bad in Experiments T, V, S. TODO: Investigate!
 
+## Addendum
+
+All series except for $I$ (which is `ManyAlternatives`, which we handle
+gracefully) are exponential in the *width* of the pattern match.
+
+### S Series
+
+Here's $S_2$:
+
+```
+data T = A | B
+
+s :: T -> T -> T -> T -> ()
+s A A _ _ = ()
+s _ _ A A = ()
+s A B A B = ()
+```
+
+These are the uncovered matches:
+
+```
+A B B _
+B _ A B
+B _ B _
+```
+
+Just by recognising the pattern here (imagine `B _` is 1 and `A B` is zero),
+it's easy to be convinced that the number of uncovered matches of $S_n$ is
+$2^n-1$. (Omit the last case for $2^n$ and lower constants)
+
+Why is this ineffecient for us to handle? Especially compared to the far simpler series
+
+```
+s A _ = ()
+s _ A = ()
+```
+
+The reason is that each `A A` clause splits the incoming delta into 3, one of
+which is matched by the clause itself.
+
+Still, since the matches are all independent, we get the same problem as with
+pattern guards: We double the number of deltas after each clause.
+
+### V series
+
+Here's $V_3$:
+
+```
+v A A A _ _ _ = ()
+v B _ _ A A _ = ()
+v _ B _ B _ A = ()
+v _ _ B _ B B = ()
+```
+
+This scales exponentially in the square of $n$ (I think, because more isn't
+combinatorially possible). For the mutator timing series for n=4567 is
+(0.1,0.4,2.4,22.5), so the factor from +1 increases superlinearly (roughly
+linearly, even?). That's not too surprising, we still scale exponentially in
+the width and each equation will have width $n*(n+1)/2$.
+
+Let's figure out why. Each clause has $n$ constructor matches, so will split
+each matching delta into potentially $n-1$ uncovered ones.
+
+Thus, the first one produces 3 Deltas: `B _...`, `A B _...` and `A A B _...`.
+
+The first one of which is matched by *all* clauses of the $B$ submatrix, the
+second isn't matched by the first clause of the $B$ submatrix, the third is only
+matched by the last clause.
+
+So the second clause of $V_3$ will only match the `B _...` Delta, and split it
+into 2 by the first clause of the $V_2$ submatrix. So the second clause will
+potentially match 3 Deltas, of which one (the one matching `A B` on the
+submatrix) doesn't match. So 2 Deltas.
+
+Whatever.
+
+### T series
+
+Here's $T_3$:
+
+```
+v A A A _ _ _ = ()
+v B _ _ A A _ = ()
+v _ B _ B _ A = ()
+v _ _ B _ B B = ()
+```
+
+
+
 <!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
