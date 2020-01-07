@@ -1,0 +1,92 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Structural and semantic pattern matching analysis in Haskell
+
+https://arxiv.org/abs/1909.04160
+
+Patterm match checking algorithm heavily inspired by GADTs Meet their Match
+that uses an SMT solver to solve oracle constraints, apparently as a standalone
+static analysis tool.
+
+Also introduces *evaluatedness* of a function, basically computing
+strictness/usage info from the pattern match, I guess.
+
+## Introduction
+
+All the same reasons as GADTMTM. Contributions are a static analysis tool that
+uses an SMT solver for oracle constraints plus computing evaluatedness of a
+function.
+
+## Background
+
+Some related work, including papers about pattern compilation (uninteresting
+for Haskell) and Maranget's work on pattern match checking (which accounts for
+laziness, but wrongly). Mentions
+https://ndmitchell.com/downloads/paper-not_all_patterns_but_enough-25_sep_2008.pdf,
+which also describes a static analysis tool that works for higher-order cases
+(like `let (x:xs) = id [1]`). And finally GADTMTM.
+
+## Algorithm
+
+Mostly GADTMTM, but with some minor errors and ambiguities in presentation.
+
+No negative constraints, so all the same difficulties with Con splitting
+(efficiency, COMPLETE set selection).
+
+I don't understand section 3.6 about evaluatedness. In fact, they are wrong
+when they say that evaluating `fst (undefined, undefined)` will not diverge.
+So it's all rather moot.
+
+## Implementation
+
+As a standalone tool using the GHC API. Performs minimal desugaring (for the
+guards, like we do, apparently), but otherwise operates on the AST. Apparently
+they don't "interface with GHC". So maybe they are using `haskell-src-exts` for
+parsing? They don't properly support GADTs (and probably also data/type
+families) due to the fact that they can't reuse GHC's constraint solver.
+
+They represent integer literals by variable patterns and a guard.
+
+The AST is finally brought into a representation understandable by an SMT solver.
+Only some Haskell functions have a theory, like boolean and arithmetic expressions.
+
+The constraint solver handles VarVar, VarBot and VarCore (basically)
+equalities, where the latter must be Boolean expressions.
+After some simplification, the boolean equalities are passed to an SMT solver
+which determines satisfiability.
+
+## Evaluation
+
+Focusing on syntax only in a standalone tool, they get similar results as
+GADTMTM (for non-GADT examples). For function with guards, there is an improvement.
+
+(Note: I don't think it could handle cases where we mix pattern guards and
+constructor pattern matches, because the necessary negative info is not
+available to the constraint solver)
+
+Counterexamples for guards are nice.
+
+I think we can replicate most of the functionaitliy (`not`, linear arithmetic,
+function application), very simple. Except maybe for linear arithmetic.
+
+## (My) Conclusion
+
+In general the approach seems to try to interpret certain expression constructs
+in guards. In particular, it will *not* look into the definitions of functions,
+so it can't interpret complete Haskell. At that point, it boils down to giving
+certain functions a first-class treatment.
+
+Many of the benefits can be achieved in our approach with a very simple extension
+of the constraint solver:
+
+- CSE will take care of function applications
+- The constraint solver can be made aware of boolean logic (`not`, `||`, `&&`) rather cheaply
+- The constraint solver can be made aware of linear arithmetic, probably at a higher price.
+
+The last two points basically amount to an additional case in `addVarCoreCt`
+for interpreted functions, just before the base case. We write our own simple
+SMT solver, so to speak. Since I can't think of more theories than boolean
+logic and linear arithmetic, this seems fine. Using an external SMT solver
+seems like overkill, but maybe we can even allow it as an extension point?
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
