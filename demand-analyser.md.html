@@ -2,16 +2,29 @@
 
 # Thoughts about DmdAnal
 
-## Reasons to seperate out StrAnal, UsageAnal and CPR
+## What does a `Demand` *mean*?
 
-- They're different enough that there are a lot of special cases  
-  - Note [Aggregated demand for cardinality]
-  - Note [Lazy and unleashable free variables] -- basically because LetUp is only beneficial for UsageAnal
-  - That whole thunk vs. function distinction
-  - [Hacks for efficient fix-pointing](https://ghc.haskell.org/trac/ghc/ticket/14816)
-  - CPR: is fundamentally a forward analysis, as shown by nested CPR
-- Special cases aren't easily understood; which code fragment/comment refers to which analysis?
-- The data dependencies form a DAG: `Usage -> Strictness -> CPR`  
-  - results in the extra virgin run for CPR
+A `Demand` describes how (often and deep) a variable is evaluated.
+It is meaningless to talk about a `Demand` in isolation; rather an expression
+puts a `Demand` on one of its free variables (or arguments) when the expression
+itself is evaluated to a certain depth, which described by a `SubDemand`.
+
+Often, this sub-demand on the expression is implicitly assumed to be the Top of
+the lattice, which means "evaluated to WHNF, but possibly deeper".
+
+When a demand on `x` (which occurs free in some expression `e` which is put
+under sub-demand Top) is of the form `[1,u]*sd`, that means it is safe to insert
+a `seq`, thus ``x `seq` e``.
+
+
+Both Usage and Strictness describe a property *over all traces* through an expression.
+
+[[e sd_e]](x) = [l,u] :* sd
+
+<=>
+
+(Consider sd_e later. Seems appropriate to build a continuation/context from sd)
+Let T be the set of all traces through `e` according to the collecting semantics.
+Then `forall t∈T. l <= eval_x(t) <= u ∧ eval_x(t) > 0 => "t evaluates x deeply according to sd"`
 
 <!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
