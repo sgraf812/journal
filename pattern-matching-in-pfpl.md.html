@@ -1,0 +1,18 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Pattern Matching
+
+## Exhaustiveness and Redundancy
+
+- Strict language; val judgment leaves no room for ⊥, I think
+- "pattern focused", even the constraints have no variable they reference. No "global" context with contraints that is extended; as a result very local reasoning
+- Lemma 13.4 shows completeness, but the language is very simple; no guards, no type evidence, no consideration for long-distance info.
+- The resulting typing rule doesn't look at the scrutinee at all to determine exhaustiveness. That allows the progress lemma to be proven.
+
+## Pattern Matching with typed holes
+
+- Argues that for typed holes in patterns (which may or may not match), we need to extend with an unknown constraint, which may fail (thus is "ignored" wrt. exhaustiveness) but not always (so an unfilled hole does not emit a redundancy warning for the rule under the cursor)
+- We could emulate by a simple guard `True <- hole`, where `hole :: Bool` is the unlifted (bc. pattern) hole variable. Quite similar to how we'd treat a "keepalive" binding...
+- I don't think we need anything special for typed epxression holes. They are just like variables.
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
