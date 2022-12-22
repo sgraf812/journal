@@ -1,0 +1,25 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Thoughts about delimited continuations
+
+See [Wikipedia]().
+
+## shift/reset
+
+In a nutshell, as a refresher:
+
+```scheme
+(+ 1 (reset (* 2 (shift k (k (k 4))))))
+```
+
+returns 17; is just the continuation between `reset` and `shift`, which is
+called *twice* in the `shift`ed expression (which is evaluated before the
+continuation, as per CbV). After evaluation of the expression, execution
+continues outside of the reset, increments to 17.
+
+The occurrence of `shift` marks the hole of the continuation's execution
+context.
+
+
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
