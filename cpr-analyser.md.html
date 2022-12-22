@@ -1,0 +1,53 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Thoughts about CprAnal
+
+## Nested CPR
+
+### Deriving higher-order CPR and termination
+
+It makes sense to look at the strictness signature to figure out what gets
+unboxed (CPR) and what we are strict in (term only). Hence we do so.
+
+Q: Do we also need to look at idDemandInfo and forceCprTy in the Lam case?
+A: We might, but it's optional: Apart from let-bound lams (which are
+already handled by looking at the strictness signature), we can look at
+idDemandInfo for anonymous lambdas. But only for termination info, since we
+never WW these! And just using topCprType is conservative and probably won't
+bite.
+
+Now, there is another tension:
+Q: When do we uphold our promise of forcing *arguments* according to strictness signature?
+A: There are two options:
+
+1. In the App case, we get to know the ArgStr which the app head puts on the
+argument. These ultimately come from the CPR signature. But this requires us to
+include ArgStr in the Cpr type, which is a bit weird. These will all be lazy
+for data constrcutor apps, for example.
+2. In cprTransform, where we see the idStrictness. It better matches with the
+fact that the obligation to force is part of the CPR/strictness signature. Also
+there is no need for ArgStr in the CPR type (only arity, possibly). It's also in
+line with what DmdAnal does.
+
+(Note that all this is only necessary for the termination analysis)
+
+Q: What about unsaturated applications? Should `cprTransform` return `topCprType` or can we do better/simpler?
+A: Just returning the unwrapped signature would work fine for CPR info. We
+would just trim the signature to idArity in AnalBind, so we would not need a
+special case if it was for CPR.
+But not so much for termination! In an undersaturated application, we would
+still force the incoming argument types and account for their termination,
+which is wrong. Termination is only relevant when we have a saturated
+application (to `idArity` arguments).
+
+Ergo: `cprTranform` must only account termination in a saturated application.
+
+Q: We need to forget CPR on incoming arguments flowing into *anonymous* lambdas (but not let-bound manifest ones). How do we do that?
+A: We could do so in the App case; We already assume CPR according to StrictSig
+for let-bound things and in all other cases we don't actually have CPR. EXCEPT
+for DataCon transformers! What to do about them?????
+On the other hand, there should never be a `App (Lam{}) _`, it would have been
+eliminated by the simplifier. The case we are talking about will never happen!
+Anonymous lambdas will never have an incoming CPR type. So don't sweat it.
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
